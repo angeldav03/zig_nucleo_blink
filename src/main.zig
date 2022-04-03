@@ -3,24 +3,23 @@ const regs = @import("registers.zig");
 pub fn main() void {
     systemInit();
 
-    // Enable GPIOD port
-    regs.RCC.AHB1ENR.modify(.{ .GPIODEN = 1 });
+    // Enable GPIOB port
+    regs.RCC.AHB2ENR.modify(.{ .GPIOBEN = 1 });
 
-    // Set pin 12/13/14/15 mode to general purpose output
-    regs.GPIOD.MODER.modify(.{ .MODER12 = 0b01, .MODER13 = 0b01, .MODER14 = 0b01, .MODER15 = 0b01 });
+    // Set pin 2 mode to general purpose output
+    regs.GPIOB.MODER.modify(.{
+        .MODER3 = 0b01, 
+    });
 
-    // Set pin 12 and 14
-    regs.GPIOD.BSRR.modify(.{ .BS12 = 1, .BS14 = 1 });
+    // Set pin 2
+    regs.GPIOB.BSRR.modify(.{ .BS3 = 1 });
 
     while (true) {
         // Read the LED state
-        var leds_state = regs.GPIOD.ODR.read();
+        var leds_state = regs.GPIOB.ODR.read();
         // Set the LED output to the negation of the currrent output
-        regs.GPIOD.ODR.modify(.{
-            .ODR12 = ~leds_state.ODR12,
-            .ODR13 = ~leds_state.ODR13,
-            .ODR14 = ~leds_state.ODR14,
-            .ODR15 = ~leds_state.ODR15,
+        regs.GPIOB.ODR.modify(.{
+            .ODR3 = ~leds_state.ODR3
         });
 
         // Sleep for some time
@@ -41,7 +40,7 @@ fn systemInit() void {
 
     // Enable FPU coprocessor
     // WARN: currently not supported in qemu, comment if testing it there
-    regs.FPU_CPACR.CPACR.modify(.{ .CP = 0b11 });
+    // regs.FPU_CPACR.CPACR.modify(.{ .CP = 0b11 });
 
     // Enable HSI
     regs.RCC.CR.modify(.{ .HSION = 1 });
@@ -50,16 +49,16 @@ fn systemInit() void {
     while (regs.RCC.CR.read().HSIRDY != 1) {}
 
     // Select HSI as clock source
-    regs.RCC.CFGR.modify(.{ .SW0 = 0, .SW1 = 0 });
+    regs.RCC.CFGR.modify(.{ .SW = 1 });
 
     // Enable external high-speed oscillator (HSE)
-    regs.RCC.CR.modify(.{ .HSEON = 1 });
+    // regs.RCC.CR.modify(.{ .HSEON = 0 });
 
     // Wait for HSE ready
-    while (regs.RCC.CR.read().HSERDY != 1) {}
+    // while (regs.RCC.CR.read().HSERDY != 1) {}
 
     // Set prescalers for 168 MHz: HPRE = 0, PPRE1 = DIV_2, PPRE2 = DIV_4
-    regs.RCC.CFGR.modify(.{ .HPRE = 0, .PPRE1 = 0b101, .PPRE2 = 0b100 });
+    regs.RCC.CFGR.modify(.{ .HPRE = 0, .PPRE1 = 0b000, .PPRE2 = 0b000 });
 
     // Disable PLL before changing its configuration
     regs.RCC.CR.modify(.{ .PLLON = 0 });
@@ -69,29 +68,11 @@ fn systemInit() void {
     regs.RCC.PLLCFGR.modify(.{
         .PLLSRC = 1,
         // PLLM = 8 = 0b001000
-        .PLLM0 = 0,
-        .PLLM1 = 0,
-        .PLLM2 = 0,
-        .PLLM3 = 1,
-        .PLLM4 = 0,
-        .PLLM5 = 0,
+        .PLLM = 0,
         // PLLN = 336 = 0b101010000
-        .PLLN0 = 0,
-        .PLLN1 = 0,
-        .PLLN2 = 0,
-        .PLLN3 = 0,
-        .PLLN4 = 1,
-        .PLLN5 = 0,
-        .PLLN6 = 1,
-        .PLLN7 = 0,
-        .PLLN8 = 1,
+        .PLLN = 2,
         // PLLP = 2 = 0b10
-        .PLLP0 = 0,
-        .PLLP1 = 1,
-        // PLLQ = 7 = 0b111
-        .PLLQ0 = 1,
-        .PLLQ1 = 1,
-        .PLLQ2 = 1,
+        .PLLR = 1,
     });
 
     // Enable PLL
@@ -101,14 +82,14 @@ fn systemInit() void {
     while (regs.RCC.CR.read().PLLRDY != 1) {}
 
     // Enable flash data and instruction cache and set flash latency to 5 wait states
-    regs.FLASH.ACR.modify(.{ .DCEN = 1, .ICEN = 1, .LATENCY = 5 });
+    regs.FLASH.ACR.modify(.{ .DCEN = 1, .ICEN = 1, .LATENCY = 1 });
 
     // Select PLL as clock source
-    regs.RCC.CFGR.modify(.{ .SW1 = 1, .SW0 = 0 });
+    regs.RCC.CFGR.modify(.{ .SW = 3 });
 
     // Wait for PLL selected as clock source
     var cfgr = regs.RCC.CFGR.read();
-    while (cfgr.SWS1 != 1 and cfgr.SWS0 != 0) : (cfgr = regs.RCC.CFGR.read()) {}
+    while (cfgr.SWS != 1) : (cfgr = regs.RCC.CFGR.read()) {}
 
     // Disable HSI
     regs.RCC.CR.modify(.{ .HSION = 0 });

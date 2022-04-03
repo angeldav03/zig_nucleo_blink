@@ -1,32 +1,45 @@
+const Builder = @import("std").build.Builder;
+const builtin = @import("builtin");
 const std = @import("std");
 
-pub fn build(b: *std.build.Builder) void {
-    // Standard target options allows the person running `zig build` to choose
-    // what target to build for. Here we do not override the defaults, which
-    // means any target is allowed, and the default is native. Other options
-    // for restricting supported target set are available.
-    const target = b.standardTargetOptions(.{});
-
-    // Standard release options allow the person running `zig build` to select
-    // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
-    //const mode = b.standardReleaseOptions();
+pub fn build(b: *Builder) void {
+    // Target STM32F407VG
     const target = .{
         .cpu_arch = .thumb,
         .cpu_model = .{ .explicit = &std.Target.arm.cpu.cortex_m4 },
         .os_tag = .freestanding,
         .abi = .eabihf,
     };
-    const exe = b.addExecutable("STM32F4_blink", "src/main.zig");
-    exe.setTarget(target);
-    exe.setBuildMode(mode);
-    exe.install();
 
-    const run_cmd = exe.run();
-    run_cmd.step.dependOn(b.getInstallStep());
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
+    // Standard release options allow the person running `zig build` to select
+    // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
+    const mode = b.standardReleaseOptions();
 
-    const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
+    const elf = b.addExecutable("zig-stm32-blink.elf", "src/startup.zig");
+    elf.setTarget(target);
+    elf.setBuildMode(mode);
+
+    const vector_obj = b.addObject("vector", "src/vector.zig");
+    vector_obj.setTarget(target);
+    vector_obj.setBuildMode(mode);
+
+    elf.addObject(vector_obj);
+    elf.setLinkerScriptPath(.{ .path = "src/linker.ld" });
+
+    const bin = b.addInstallRaw(elf, "zig-stm32-blink.bin", .{});
+    const bin_step = b.step("bin", "Generate binary file to be flashed");
+    bin_step.dependOn(&bin.step);
+
+    const flash_cmd = b.addSystemCommand(&[_][]const u8{
+        "st-flash",
+        "write",
+        b.getInstallPath(bin.dest_dir, bin.dest_filename),
+        "0x8000000",
+    });
+    flash_cmd.step.dependOn(&bin.step);
+    const flash_step = b.step("flash", "Flash and run the app on your STM32F4Discovery");
+    flash_step.dependOn(&flash_cmd.step);
+
+    b.default_step.dependOn(&elf.step);
+    b.installArtifact(elf);
 }

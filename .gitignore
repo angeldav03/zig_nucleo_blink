@@ -1,0 +1,8 @@
+# folders to ingnore
+zig-cache\
+zig-out\
+
+# Filetypes ignored
+*.bin
+*.elf
+*.o
